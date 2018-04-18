@@ -1690,6 +1690,9 @@ sp_head::execute_trigger(THD *thd,
   MEM_ROOT call_mem_root;
   Query_arena call_arena(&call_mem_root, Query_arena::STMT_INITIALIZED_FOR_SP);
   Query_arena backup_arena;
+  // Alternative MDEV-13727 fixes
+  // bool save_enable_slow_log;
+
   DBUG_ENTER("sp_head::execute_trigger");
   DBUG_PRINT("info", ("trigger %s", m_name.str));
 
@@ -1758,8 +1761,10 @@ sp_head::execute_trigger(THD *thd,
   }
 
   thd->spcont= nctx;
-
+  // save_enable_slow_log= thd->enable_slow_log;
+  // thd->enable_slow_log= false;
   err_status= execute(thd, FALSE);
+  // thd->enable_slow_log= save_enable_slow_log;
 
 err_with_cleanup:
   thd->restore_active_arena(&call_arena, &backup_arena);
@@ -3476,7 +3481,14 @@ sp_instr_stmt::execute(THD *thd, uint *nextp)
   thd->profiling.set_query_source(m_query.str, m_query.length);
 #endif
 
-  if ((save_enable_slow_log= thd->enable_slow_log))
+  // Todo:  remove upon review
+  // Fixme: alternatively  `thd->enable_slow_log' could be set to `false'
+  //        by grand-caller similarly to how it's done to the SP case
+  //        by
+  // commit 21518ab2e4538e1a6c9b3a136a93885a98492218
+  // Author: Monty <monty@mariadb.org>
+  // Date:   Fri Jul 21 19:56:41 2017 +0300
+  if ((save_enable_slow_log= thd->enable_slow_log) && !thd->in_sub_stmt)
   {
     /*
       Save start time info for the CALL statement and overwrite it with the
@@ -3549,7 +3561,7 @@ sp_instr_stmt::execute(THD *thd, uint *nextp)
     }
   }
   /* Restore the original query start time */
-  if (thd->enable_slow_log)
+  if (thd->enable_slow_log && !thd->in_sub_stmt)
     thd->restore_query_start_time(&time_info);
 
   DBUG_RETURN(res || thd->is_error());
