@@ -446,7 +446,8 @@ int federatedx_io_mysql::actual_query(const char *buffer, uint length)
     mysql.reconnect= 1;
   }
 
-  error= mysql_real_query(&mysql, buffer, length);
+  if (!(error= mysql_real_query(&mysql, STRING_WITH_LEN("set time_zone='+00:00'"))))
+    error= mysql_real_query(&mysql, buffer, length);
   
   DBUG_RETURN(error);
 }
@@ -641,4 +642,3 @@ int federatedx_io_mysql::seek_position(FEDERATEDX_IO_RESULT **io_result,
 
   return 0;
 }
-
